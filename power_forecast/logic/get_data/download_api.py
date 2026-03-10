@@ -1,10 +1,3 @@
-"""
-Météo Historique Europe → DataFrame → CSV
-Utilise l'API Open-Meteo Historical (gratuite, sans clé API)
-Données disponibles à partir du 1er janvier 1940
-Dépendances : pip install pandas
-"""
-
 import urllib.request
 import json
 import pandas as pd
@@ -164,11 +157,11 @@ def main():
     apercu(df)
 
     # ── Export CSV ────────────────────────────────────────────────────────────
-    df.to_csv(OUTPUT_FILE, index=False, sep=";", encoding="utf-8-sig",
-              date_format="%Y-%m-%d %H:00:00") # Changed date_format for hourly
+    # df.to_csv(OUTPUT_FILE, index=False, sep=";", encoding="utf-8-sig",
+    #           date_format="%Y-%m-%d %H:00:00") # Changed date_format for hourly
 
-    print(f"\n✅ DataFrame exporté : {OUTPUT_FILE}")
-    print(f"   {len(df)} lignes × {len(df.columns)} colonnes")
+    # print(f"\n✅ DataFrame exporté : {OUTPUT_FILE}")
+    # print(f"   {len(df)} lignes × {len(df.columns)} colonnes")
 
     return df   # utile en notebook Jupyter
 
@@ -176,184 +169,116 @@ def main():
 if __name__ == "__main__":
     df = main()
 
-
-
-"""
-ENTSO-E API Client
-Récupère les prix de l'électricité (Day-Ahead) et la production par pays européen.
-
-Prérequis:
-    pip install entsoe-py pandas
-
-Clé API: Créer un compte sur https://transparency.entsoe.eu
-    puis demander un token via Mes paramètres → Générer un jeton API
-"""
+# ============================================================
+# ENTSO-E API — Guide d'utilisation complet
+# Bibliothèque : entsoe-py
+# Installation : pip install entsoe-py pandas matplotlib
+# ============================================================
 
 !pip install entsoe-py
 import pandas as pd
-from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
 from entsoe import EntsoePandasClient
 
-# ─────────────────────────────────────────────
-# CONFIGURATION
-# ─────────────────────────────────────────────
 
-API_KEY = "e886592f-5217-4ba0-af77-e9ff6319599a"  # <-- Remplacez ici VOTRE_TOKEN_API_ENTSOE
-
-# Codes ENTSO-E (bidding zones / pays)
-COUNTRIES = {
-    "France":       "FR",
-    "Allemagne":    "DE_LU",
-    "Espagne":      "ES",
-    "Italie Nord":  "IT_NORD",
-    "Belgique":     "BE",
-    "Pays-Bas":     "NL",
-    "Portugal":     "PT",
-    "Autriche":     "AT",
-    "Suisse":       "CH",
-    "Pologne":      "PL",
-    "Suède":        "SE_1",   # Zone 1 (nord)
-    "Norvège":      "NO_1",
-    "Danemark":     "DK_1",
-    "Finlande":     "FI",
-    "Grèce":        "GR",
-    "République Tchèque": "CZ",
-    "Hongrie":      "HU",
-    "Roumanie":     "RO",
-}
-
-# Période : hier (pour avoir les données complètes)
-END   = pd.Timestamp(datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0), tz="UTC")
-START = END - timedelta(days=1)
-
-
-# ─────────────────────────────────────────────
-# CLIENT
-# ─────────────────────────────────────────────
-
+# ── 1. CONFIGURATION ─────────────────────────────────────────
+API_KEY = "82e51d13-ad8c-44f1-99bd-a000cbcc2ae3"  # Obtenir sur transparency.entsoe.eu
 client = EntsoePandasClient(api_key=API_KEY)
 
+# Définir la plage temporelle (toujours avec timezone !)
+start = pd.Timestamp("20250101", tz="Europe/Paris")
+end   = pd.Timestamp("20250630", tz="Europe/Paris")
 
-# ─────────────────────────────────────────────
-# 1. PRIX DAY-AHEAD (€/MWh)
-# ─────────────────────────────────────────────
-
-def get_day_ahead_prices(country_code: str, country_name: str) -> pd.DataFrame | None:
-    """Récupère les prix horaires Day-Ahead pour un pays."""
-    try:
-        prices = client.query_day_ahead_prices(country_code, start=START, end=END)
-        df = prices.to_frame(name="prix_eur_mwh")
-        df.index.name = "datetime_utc"
-        df["pays"] = country_name
-        df["code"] = country_code
-        print(f"  ✅ Prix {country_name}: {df['prix_eur_mwh'].mean():.1f} €/MWh (moy)")
-        return df
-    except Exception as e:
-        print(f"  ⚠️  Prix {country_name} ({country_code}): {e}")
-        return None
+country = "DE_LU"  # France — autres : 'DE_LU', 'ES', 'BE', 'IT', 'NL'...
 
 
-# ─────────────────────────────────────────────
-# 2. PRODUCTION PAR TYPE (MW)
-# ─────────────────────────────────────────────
+# ── 2. PRIX DAY-AHEAD (€/MWh) ────────────────────────────────
+print("📈 Prix day-ahead France (€/MWh)")
+prices = client.query_day_ahead_prices(country, start=start, end=end)
+print(prices.head())
 
-def get_generation(country_code: str, country_name: str) -> pd.DataFrame | None:
-    """Récupère la production par type d'énergie pour un pays."""
-    try:
-        gen = client.query_generation(country_code, start=START, end=END, psr_type=None)
-        # Aplatir les colonnes multi-niveaux si présentes
-        if isinstance(gen.columns, pd.MultiIndex):
-            gen.columns = [" - ".join(filter(None, col)).strip() for col in gen.columns]
-        gen.index.name = "datetime_utc"
-        gen["pays"] = country_name
-        gen["code"] = country_code
-        total_mw = gen.select_dtypes("number").sum(axis=1).mean()
-        print(f"  ✅ Production {country_name}: {total_mw:.0f} MW (moy toutes sources)")
-        return gen
-    except Exception as e:
-        print(f"  ⚠️  Production {country_name} ({country_code}): {e}")
-        return None
+prices.plot(title="Prix day-ahead — Allemagne (2015 -2025)", ylabel="€/MWh")
+plt.tight_layout()
+plt.show()
 
 
-# ─────────────────────────────────────────────
-# 3. RÉCAPITULATIF PAR PAYS
-# ─────────────────────────────────────────────
-
-def summary_by_country(
-    all_prices: pd.DataFrame,
-    all_gen: dict[str, pd.DataFrame]
-) -> pd.DataFrame:
-    """Crée un tableau récapitulatif : prix moyen + mix énergétique moyen."""
-    rows = []
-    for country, code in COUNTRIES.items():
-        row = {"Pays": country, "Code": code}
-
-        # Prix moyen
-        subset = all_prices[all_prices["code"] == code]
-        if not subset.empty:
-            row["Prix moyen (€/MWh)"] = round(subset["prix_eur_mwh"].mean(), 2)
-            row["Prix min (€/MWh)"]   = round(subset["prix_eur_mwh"].min(), 2)
-            row["Prix max (€/MWh)"]   = round(subset["prix_eur_mwh"].max(), 2)
-
-        # Production totale moyenne
-        if country in all_gen and all_gen[country] is not None:
-            num = all_gen[country].select_dtypes("number")
-            row["Production totale moy (MW)"] = round(num.sum(axis=1).mean(), 0)
-
-        rows.append(row)
-
-    return pd.DataFrame(rows).set_index("Pays")
+# ── 3. CONSOMMATION RÉELLE ────────────────────────────────────
+print("\n⚡ Consommation réelle (MW)")
+load = client.query_load(country, start=start, end=end)
+print(load.head())
 
 
-# ─────────────────────────────────────────────
-# MAIN
-# ─────────────────────────────────────────────
+# ── 4. PRÉVISION DE CONSOMMATION ─────────────────────────────
+print("\n📊 Prévision de consommation (MW)")
+load_forecast = client.query_load_forecast(country, start=start, end=end)
+print(load_forecast.head())
 
-if __name__ == "__main__":
-    print(f"\n📅 Période : {START.date()} → {END.date()} (UTC)\n")
 
-    # --- Prix ---
-    print("── Récupération des prix Day-Ahead ──")
-    price_frames = []
-    for name, code in COUNTRIES.items():
-        df = get_day_ahead_prices(code, name)
-        if df is not None:
-            price_frames.append(df)
+# ── 5. PRODUCTION PAR FILIÈRE ────────────────────────────────
+# print("\n🏭 Production par filière (MW)")
+# generation = client.query_generation(country, start=start, end=end)
+# print(generation.head())
 
-    all_prices = pd.concat(price_frames) if price_frames else pd.DataFrame()
+# generation.plot(
+#     title="Mix de production — Allemagne (2015 -2025)",
+#     ylabel="MW",
+#     figsize=(14, 6)
+# )
+# plt.tight_layout()
+# plt.show()
 
-    # --- Production ---
-    print("\n── Récupération de la production par source ──")
-    all_gen = {}
-    for name, code in COUNTRIES.items():
-        all_gen[name] = get_generation(code, name)
 
-    # --- Récapitulatif ---
-    print("\n── Récapitulatif ──")
-    summary = summary_by_country(all_prices, all_gen)
-    pd.set_option("display.max_columns", None)
-    pd.set_option("display.width", 120)
-    print(summary.to_string())
+# ── 6. PRÉVISION ÉOLIEN + SOLAIRE ────────────────────────────
+print("\n🌬️ Prévision éolien + solaire (MW)")
+wind_solar = client.query_wind_and_solar_forecast(
+    country, start=start, end=end, psr_type=None  # None = toutes les filières
+)
+print(wind_solar.head())
 
-    # --- Export CSV ---
-    all_prices.to_csv("prix_electricite.csv")
-    print("\n✅ Exporté : prix_electricite.csv")
 
-    for name, df in all_gen.items():
-        if df is not None:
-            safe_name = name.replace(" ", "_").lower()
-            df.to_csv(f"production_{safe_name}.csv")
-    print("✅ Exporté : production_<pays>.csv pour chaque pays disponible")
+# ── 7. CAPACITÉ INSTALLÉE ────────────────────────────────────
+print("\n🔋 Capacité installée par filière (MW)")
+capacity = client.query_installed_generation_capacity(country, start=start, end=end)
+print(capacity)
 
-    # --- Optionnel : export Excel tout-en-un ---
-    try:
-        with pd.ExcelWriter("entsoe_data.xlsx", engine="openpyxl") as writer:
-            summary.to_excel(writer, sheet_name="Récapitulatif")
-            all_prices.to_excel(writer, sheet_name="Prix Day-Ahead")
-            for name, df in all_gen.items():
-                if df is not None:
-                    sheet = name[:31]  # Excel limite à 31 caractères
-                    df.to_excel(writer, sheet_name=sheet)
-        print("✅ Exporté : entsoe_data.xlsx (toutes feuilles)")
-    except ImportError:
-        print("ℹ️  openpyxl non installé, export Excel ignoré (pip install openpyxl)")
+
+# ── 8. FLUX TRANSFRONTALIERS ─────────────────────────────────
+print("\n🔁 Flux Allemagne → France (MW)")
+cross_border = client.query_crossborder_flows("DE_LU", "FR", start=start, end=end)
+print(cross_border.head())
+
+
+# ── 9. CAPACITÉ D'ÉCHANGE (NTC) ──────────────────────────────
+# print("\n🔌 Capacité nette de transfert DE_LU → FR (MW)")
+# ntc = client.query_net_transfer_capacity_dayahead("DE_LU", "FR", start=start, end=end)
+# print(ntc.head())
+
+
+# ── 10. EXPORT CSV ───────────────────────────────────────────
+# prices.to_csv("prix_day_ahead_fr.csv")
+# # generation.to_csv("production_fr.csv")
+# print("\n✅ Fichiers exportés : prix_day_ahead_fr.csv, production_fr.csv")
+
+# ── PAS DE TEMPS ─────────────────────────────────────────────
+# Choisir le pas de temps : "H" (heure) ou "D" (jour)
+TIME_STEP = "D"  # ← Modifier ici : "H" pour horaire, "D" pour journalier
+
+def resample(series, step=TIME_STEP):
+    """Rééchantillonne une Series ou DataFrame selon le pas de temps choisi."""
+    if step == "D":
+        if isinstance(series, pd.DataFrame):
+            return series.resample("D").mean()
+        return series.resample("D").mean()
+    else:  # "H" — pas de temps horaire (données brutes)
+        return series
+
+label_step = "journalier" if TIME_STEP == "D" else "horaire"
+print(f"⏱️  Pas de temps sélectionné : {label_step} ({TIME_STEP})\n")
+
+# ── 2. PRIX DAY-AHEAD (€/MWh) ────────────────────────────────
+print("📈 Prix day-ahead (€/MWh)")
+prices = resample(prices)
+print(prices.head())
+prices.plot(title=f"Prix day-ahead — (2015-2025) [{label_step}]", ylabel="€/MWh")
+plt.tight_layout()
+plt.show()
