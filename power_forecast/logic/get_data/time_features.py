@@ -4,9 +4,10 @@ from power_forecast.logic.utils.others import load_df, save_df
 from power_forecast.params import *
 from power_forecast.logic.get_data.download_api import create_dataframe_base
 import pycatch22
+import holidays
 
 
-# df_aligned = align_start_to_column(df, column='HRV', apply=True)
+
 def align_start_to_column(df, column, apply=True):
     """
     Make dataset start from the first valid (non-NaN) value of a specific column.
@@ -19,10 +20,6 @@ def align_start_to_column(df, column, apply=True):
     return df
 
 
-# Below -350:  25 values
-# Above 2000: 7 values
-# Total to replace:   32 / 2270016 (0.0014%)
-# df_clean = replace_outliers_with_interpolation(df_aligned, limit_low=LIMIT_LOW, limit_high=LIMIT_HIGH)
 def replace_outliers_with_interpolation(df, limit_low=LIMIT_LOW, limit_high=LIMIT_HIGH):
     """
     Replace values outside [limit_low, limit_high] with NaN,
@@ -115,7 +112,6 @@ def add_catch24_features(df, window=WINDOW_CATCH22, step=STEP_CATCH22, time_inte
     return df_enriched
 
 
-
 def add_temporal_features(df:pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     idx = df.index  # DatetimeIndex
@@ -151,6 +147,37 @@ def add_temporal_features(df:pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def add_public_holidays(df, country):
+    """
+    Add a binary is_holiday column for a given country based on public holidays.
+    If the country is not found in COUNTRY_HOLIDAY_MAP, the column is filled with 0.
+
+    Parameters
+    ----------
+    df      : DataFrame with DatetimeIndex
+    country : ISO column name (e.g. 'DEU')
+
+    Returns
+    -------
+    df : original df with one new binary column 'is_holiday_{country}'
+    """
+    df = df.copy()
+
+    if country not in COUNTRY_HOLIDAY_MAP:
+        print(f"⚠️  '{country}' not in COUNTRY_HOLIDAY_MAP — filling is_holiday_{country} with 0")
+        df[f"is_holiday_{country}"] = 0
+        return df
+
+    holiday_code = COUNTRY_HOLIDAY_MAP[country]
+    years        = df.index.year.unique().tolist()
+    country_hols = holidays.country_holidays(holiday_code, years=years)
+
+    # use .date() to get datetime.date objects matching the holidays library format
+    df[f"is_holiday_{country}"] = pd.Series(df.index.date, index=df.index).isin(country_hols).astype(int)
+
+    return df
+
+
 def build_feature_dataframe(
     filepath:      str,
     country_objective: str  = 'FRA',
@@ -161,6 +188,7 @@ def build_feature_dataframe(
     step:          int  = STEP_CATCH22,
     time_interval: str  = 'hourly',
     save_name:     str  = 'df_catch24_timeseries',
+    drop_first_week: bool = True,
     load_from_pickle: bool = False,
 ) -> pd.DataFrame:
     """
@@ -212,12 +240,17 @@ def build_feature_dataframe(
     df = replace_outliers_with_interpolation(df, limit_low=limit_low, limit_high=limit_high)
 
     # ── Step 4: catch24 features ──────────────────────────────────────────────
-    print("\n── Step 4: catch24 features (may take > 1/2 min) ──────────────────")
+    print(f"\n── Step 4: catch24 features for {country_objective} ──────────────────")
     df = add_catch24_features(df, window=window, step=step, time_interval=time_interval, country=country_objective)
+    
+    if drop_first_week:
+        df = df[df.index >= df.index.min() + pd.Timedelta(days=window)]
+        print(f"Dropped first {window} days to avoid NaNs from catch24 rolling window")
 
     # ── Step 5: Temporal features ─────────────────────────────────────────────
     print("\n── Step 5: Temporal features ────────────────────────────────────")
     df = add_temporal_features(df)
+    df = add_public_holidays(df, country=country_objective)
     
     # ── Step 6: Meteo features ─────────────────────────────────────────────
     #print("\n── Step 6: Meteo features ───────────────────────────────────────")
