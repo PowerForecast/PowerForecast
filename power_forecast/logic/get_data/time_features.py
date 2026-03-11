@@ -1,8 +1,7 @@
 import numpy as np
 import pandas as pd
-from power_forecast.logic.utils.others import load_df, save_df
 from power_forecast.params import *
-from power_forecast.logic.get_data.download_api import create_dataframe_base
+
 import pycatch22
 import holidays
 
@@ -178,89 +177,51 @@ def add_public_holidays(df, country):
     return df
 
 
-def build_feature_dataframe(
-    filepath:      str,
-    country_objective: str  = 'FRA',
-    align_column:  str  = 'HRV',
-    limit_low:     float = LIMIT_LOW,
-    limit_high:    float = LIMIT_HIGH,
-    window:        int  = WINDOW_CATCH22,
-    step:          int  = STEP_CATCH22,
-    time_interval: str  = 'hourly',
-    save_name:     str  = 'df_catch24_timeseries',
-    drop_first_week: bool = True,
-    load_from_pickle: bool = False,
-) -> pd.DataFrame:
+def add_target_horizon_features(df: pd.DataFrame, iso_objective: str, target_day_distance: int):
     """
-    Full feature engineering pipeline for electricity price data.
-    Runs the following steps in order:
-
-        1. create_dataframe_base       — load raw CSV
-        2. align_start_to_column       — trim to latest country start date
-        3. replace_outliers_with_interpolation — clean extreme prices
-        4. add_catch24_features        — rolling catch24 feature extraction
-        5. add_temporal_features       — cyclical and binary time features
-
-    ⚠️  Step 4 (catch24) can take more than 1 minute. On first run the result
-        is automatically saved as a pickle. On subsequent runs, set
-        load_from_pickle=True to skip recomputation and load directly.
-
-    Parameters
-    ----------
-    filepath         : path to raw CSV file
-    align_column     : country column to use as reference start date (default: 'HRV')
-    limit_low        : lower outlier bound in €/MWh                  (default: LIMIT_LOW)
-    limit_high       : upper outlier bound in €/MWh                  (default: LIMIT_HIGH)
-    window           : catch24 lookback window in days               (default: WINDOW_CATCH22)
-    step             : catch24 step size in days                     (default: STEP_CATCH22)
-    time_interval    : frequency of input df — 'hourly' or 'daily'   (default: 'hourly')
-    save_name        : pickle filename to save/load                  (default: 'df_catch24_timeseries')
-    load_from_pickle : if True, skip pipeline and load from pickle   (default: False)
-
-    Returns
-    -------
-    df : fully enriched DataFrame ready for modeling
+    df: your full timeseries dataframe (hourly)
+    iso_objective: ISO code for the country
+    target_day_distance: e.g. 2 for predicting 48h ahead
     """
+    H = target_day_distance * 24  # shift in hours
 
-    # ── Shortcut: load from pickle if already computed ────────────────────────
-    if load_from_pickle:
-        print("⚡ Loading from pickle — skipping pipeline...")
-        return load_df(save_name)
+    # --- Target temporal features (from existing columns) ---
+    temporal_cols = [
+        "hour", "day_of_week", "month", "quarter",
+        "is_weekend", "is_monday", "is_holiday_FRA",
+        "hour_sin", "hour_cos",
+        "day_of_week_sin", "day_of_week_cos",
+        "month_sin", "month_cos",
+        "day_of_year_sin", "day_of_year_cos",
+        "is_peak_hour", "is_offpeak_hour",
+        "is_summer", "is_winter",
+    ]
+    for col in temporal_cols:
+        df[f"target_{col}"] = df[col].shift(-H)
 
-    # ── Step 1: Load ──────────────────────────────────────────────────────────
-    print("\n── Step 1: Load raw data ────────────────────────────────────────")
-    df = create_dataframe_base(filepath)
+    # --- Meteo forecast (proxy: actual meteo at target time) ---
+    meteo_cols = [
+        f"{iso_objective}_Température (°C)",
+        f"{iso_objective}_Précipitations (mm)",
+        f"{iso_objective}_Vent (km/h)",
+        f"{iso_objective}_Rafales (km/h)",
+        f"{iso_objective}_Ensoleillement (MJ/m²)",
+    ]
+    for col in meteo_cols:
+        df[f"target_{col}"] = df[col].shift(-H)
 
-    # ── Step 2: Align start date ──────────────────────────────────────────────
-    print("\n── Step 2: Align start date ─────────────────────────────────────")
-    df = align_start_to_column(df, column=align_column, apply=True)
-
-    # ── Step 3: Remove outliers ───────────────────────────────────────────────
-    print("\n── Step 3: Replace outliers ─────────────────────────────────────")
-    df = replace_outliers_with_interpolation(df, limit_low=limit_low, limit_high=limit_high)
-
-    # ── Step 4: catch24 features ──────────────────────────────────────────────
-    print(f"\n── Step 4: catch24 features for {country_objective} ──────────────────")
-    df = add_catch24_features(df, window=window, step=step, time_interval=time_interval, country=country_objective)
-    
-    if drop_first_week:
-        df = df[df.index >= df.index.min() + pd.Timedelta(days=window)]
-        print(f"Dropped first {window} days to avoid NaNs from catch24 rolling window")
-
-    # ── Step 5: Temporal features ─────────────────────────────────────────────
-    print("\n── Step 5: Temporal features ────────────────────────────────────")
-    df = add_temporal_features(df)
-    df = add_public_holidays(df, country=country_objective)
-    
-    # ── Step 6: Meteo features ─────────────────────────────────────────────
-    #print("\n── Step 6: Meteo features ───────────────────────────────────────")
-    #df = meteo_features(df, country=country_objective, start_time = df.index.min(), end_time = df.index.max())
-
-    # ── Save ──────────────────────────────────────────────────────────────────
-    print("\n── Saving to pickle ─────────────────────────────────────────────")
-    save_df(df, save_name)
+    # --- Price lag anchors (safe: looking into the past) ---
+    # These are NOT shifted forward — they look backwards from current t
+    df[f"{iso_objective}_price_lag_1day"]   = df[iso_objective].shift(24)
+    df[f"{iso_objective}_price_lag_2day"]   = df[iso_objective].shift(48)
+    df[f"{iso_objective}_price_lag_3day"]   = df[iso_objective].shift(72)
+    df[f"{iso_objective}_price_lag_4day"]   = df[iso_objective].shift(96)
+    df[f"{iso_objective}_price_lag_1week"]  = df[iso_objective].shift(7*24)
 
     return df
+
+
+
 
 
 
