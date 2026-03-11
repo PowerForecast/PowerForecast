@@ -139,7 +139,15 @@ def build_feature_dataframe(
     print(f"\n── Step 7: catch24 features for {country_objective} ──────────────────")
     df = add_catch24_features(df, window=window, step=step, time_interval=time_interval, country=iso_objective)
 
-    #eliminate
+    df = df.drop(columns=[
+        'hour',
+        'day_of_week',
+        'month',
+        'quarter',
+        'year',
+        'day_of_year'
+    ])
+
     if drop_nan:
         df_clean = df.dropna()
         print(f"Rows dropped: {len(df) - len(df_clean)} to avoid nan due to target distance and catch22 features")
