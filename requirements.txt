@@ -10,7 +10,8 @@ requests
 matplotlib
 seaborn
 jupyter
-pycatch22 
+pycatch22
 pyarrow
 entsoe-py
 holidays
+tensorflow
