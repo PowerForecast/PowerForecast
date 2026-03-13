@@ -80,7 +80,6 @@ print(f"First y_test label: {fold_test.index[INPUT_LENGTH + HORIZON]}")
 # ##    Keeping y unscaled makes predictions directly interpretable
 # ##    as real electricity prices (€/MWh).
 
-fit_scaler = True  # set to False to skip scaling (useful for debugging)
 
 if fit_scaler:
     scaler = StandardScaler()
