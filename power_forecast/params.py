@@ -1,3 +1,5 @@
+import os
+
 #Params catch22
 WINDOW_CATCH22 = 7  # in days, for hourly data this means 168 hours
 STEP_CATCH22   = 1  # in days, for hourly data this means
@@ -140,5 +142,5 @@ COUNTRY_HOLIDAY_MAP = {
     'SWE': 'SE',
 }
 
-
-
+LOCAL_DATA_PATH = os.path.join(os.path.expanduser('~'), ".lewagon", "mlops", "data")
+LOCAL_REGISTRY_PATH = os.path.join(os.path.expanduser('~'), ".lewagon", "mlops", "models")

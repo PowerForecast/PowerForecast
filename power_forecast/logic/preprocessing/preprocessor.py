@@ -2,7 +2,8 @@ import pandas as pd
 pd.set_option('display.max_columns', None)
 from power_forecast.logic.get_data.download_api import replace_outliers_with_interpolation, align_start_to_column
 from power_forecast.logic.get_data.download_api import build_feature_dataframe
-from power_forecast.logic.preprocessing.scaler import standard_scaling
+from power_forecast.logic.preprocessing.scaler import standard_scaling, standard_scaling_X_new
+from power_forecast.logic.models.registry import save_scaler, load_scaler
 from power_forecast.params import *
 
 def preproc_arima(df, column):
@@ -21,7 +22,7 @@ def preproc_arima(df, column):
 
     return df_country_day
 
-def preproc_histxgb(df: pd.DataFrame, column: pd.Series, split_train_ratio: float, split_val_ratio: float):
+def preproc_histxgb_train(df: pd.DataFrame, column: pd.Series, split_train_ratio: float, split_val_ratio: float):
 
     # # ── Step 1: build DataFrame──────────────────────────────────────────────
     # df = build_feature_dataframe('raw_data/all_countries.csv', load_from_pickle=False)
@@ -33,7 +34,8 @@ def preproc_histxgb(df: pd.DataFrame, column: pd.Series, split_train_ratio: floa
     X = df.drop(columns=['target'])
 
     # ── Step 3: scaler X ──────────────────────────────────────────────
-    X = standard_scaling(X)
+    X, scaler = standard_scaling(X)
+    save_scaler(scaler, scaler_name='HistXGB_scaler')
 
     # ── Step 4: definir  train, val, test ──────────────────────────────────────────────
 
@@ -50,3 +52,21 @@ def preproc_histxgb(df: pd.DataFrame, column: pd.Series, split_train_ratio: floa
     y_test = y.iloc[val_end:]
 
     return X_train, y_train, X_val, y_val, X_test, y_test
+
+
+
+def preproc_histxgb_X_new(df: pd.DataFrame, column: pd.Series):
+
+    # # ── Step 1: build DataFrame──────────────────────────────────────────────
+    # df = build_feature_dataframe('raw_data/all_countries.csv', load_from_pickle=False)
+
+    # ── Step 2: X, y──────────────────────────────────────────────
+    df['target'] = df[column]
+    # df = df.dropna()
+    X = df.drop(columns=['target'])
+
+    # ── Step 3: scaler X ──────────────────────────────────────────────
+    scaler = load_scaler(scaler_name='HistXGB_scaler')
+    X = standard_scaling_X_new(X, scaler)
+
+    return X
