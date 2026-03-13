@@ -85,11 +85,6 @@ scaler = StandardScaler()
 fold_train[feature_cols] = scaler.fit_transform(fold_train[feature_cols])
 fold_test[feature_cols] = scaler.transform(fold_test[feature_cols])
 
-# if resample_sequences == False:
-#     X_train = np.load(SAVE_SEQUENCES / "X_train.npy")
-#     y_train = np.load(SAVE_SEQUENCES / "y_train.npy")
-#     print(f"Loaded — X_train: {X_train.shape}")
-#     print(f"Loaded — y_train: {y_train.shape}")
     
 if resample_sequences:
     X_train, y_train = get_X_y(

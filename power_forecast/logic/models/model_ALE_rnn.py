@@ -102,11 +102,11 @@ fold_test[feature_cols] = scaler.transform(fold_test[feature_cols])
 ## Output: X_train (n, 2 weeks data, n_features) | y_train (n, 24)
 
 # Load if they exisits alreaday, otherwise create them and save for future use.
-if resample_sequences == False:
-    X_train = np.load(SAVE_SEQUENCES / "X_train.npy")
-    y_train = np.load(SAVE_SEQUENCES / "y_train.npy")
-    print(f"Loaded — X_train: {X_train.shape}")
-    print(f"Loaded — y_train: {y_train.shape}")
+# if resample_sequences == False:
+#     X_train = np.load(SAVE_SEQUENCES / "X_train.npy")
+#     y_train = np.load(SAVE_SEQUENCES / "y_train.npy")
+#     print(f"Loaded — X_train: {X_train.shape}")
+#     print(f"Loaded — y_train: {y_train.shape}")
 
 
 # Method to transform our X_train in 3-dimensional array of sequences, and y_train in 2D array of corresponding labels.
