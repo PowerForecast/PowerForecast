@@ -1,4 +1,6 @@
-# Params catch22
+import os
+
+#Params catch22
 WINDOW_CATCH22 = 7  # in days, for hourly data this means 168 hours
 STEP_CATCH22 = 1  # in days, for hourly data this means
 
@@ -29,8 +31,8 @@ ROLLING_WINDOWS_TARGET = [6, 12, 24, 48, 62, 120]  # en heures
 
 ROLLING_WINDOWS_FRONTIERE = [48, 62, 120]  # en heuresGB
 
-VALID = ['AUT', 'BEL', 'BGR', 'CHE', 'CZE', 'DEU', 'DNK', 'ESP', 'EST', 'FIN', 
-         'FRA', 'GRC', 'HRV', 'HUN', 'IRL', 'ITA', 'LTU', 'LUX', 'LVA', 'NLD', 
+VALID = ['AUT', 'BEL', 'BGR', 'CHE', 'CZE', 'DEU', 'DNK', 'ESP', 'EST', 'FIN',
+         'FRA', 'GRC', 'HRV', 'HUN', 'IRL', 'ITA', 'LTU', 'LUX', 'LVA', 'NLD',
          'NOR', 'POL', 'PRT', 'ROU', 'SRB', 'SVK', 'SVN', 'SWE']
 
 FRONTIERE = {
@@ -107,11 +109,11 @@ WMO_LABELS = {
 }
 
 COLONNES_METEO = [
-    "Température (°C)",
-    "Précipitations (mm)",
-    "Vent (km/h)",
-    "Rafales (km/h)",
-    "Ensoleillement (MJ/m²)",
+    "temperature_c",
+    "precipitation_mm",
+    "vent_km_h",
+    "rafales_km_h",
+    "irradiation_MJ_m2",
 ]
 
 VILLE_TO_ISO = {
@@ -161,12 +163,13 @@ PALETTE = [
 ]
 
 # ── Constantes ─────────────────────────────────────────────────────────────────
-DEFAULT_API_KEY = "82e51d13-ad8c-44f1-99bd-a000cbcc2ae3"
+DEFAULT_API_KEY = "f26d52ca-874b-49c6-aa45-a3d7d79d43aa"
 DEFAULT_TIMEZONE = "Europe/Paris"
 DEFAULT_START = "2025-01-01"
 DEFAULT_END = "2025-06-30"
 DEFAULT_STEP = "D"  # "H" ou "D"
-DEFAULT_COUNTRIES = ["FR"]
+DEFAULT_COUNTRIES = ["FR", "DE_LU", "ES", "BE"]
+DEFAULT_TARGET_COUNTRY = "FR"
 
 # Catalogue des zones disponibles (code ENTSO-E → label lisible)
 COUNTRY_LABELS = {
@@ -230,3 +233,6 @@ COUNTRY_HOLIDAY_MAP = {
     "SVN": "SI",
     "SWE": "SE",
 }
+
+LOCAL_DATA_PATH = os.path.join(os.path.expanduser('~'), ".lewagon", "mlops", "data")
+LOCAL_REGISTRY_PATH = os.path.join(os.path.expanduser('~'), ".lewagon", "mlops", "models")
