@@ -24,11 +24,120 @@ from pathlib import Path
 from datetime import datetime
 import random
 
-from power_forecast.logic.models.model_ALE_rnn import get_X_y, train_or_load_model_lstm
 from power_forecast.logic.utils.graphs import plot_predictions_rnn, plot_best_predictions
 
 
 pd.set_option("display.max_columns", None)
+
+# ── Core: single sequence ──────────────────────────────────────────────────
+def get_Xi_yi(
+    fold: pd.DataFrame,
+    feature_cols: list,
+    target_col: str,
+    start_idx: int,
+    input_length: int = INPUT_LENGTH,
+    horizon: int = HORIZON,
+    output_length: int = OUTPUT_LENGTH,
+) -> tuple:
+    """
+    Extract one (X_i, y_i) pair from fold starting at start_idx.
+
+        [start_idx → +input_length)           → X_i  (input_length, n_features)
+        [+input_length → +horizon)             → skipped
+        [+input_length+horizon → +output_length) → y_i  (output_length,)
+    """
+    X_i = fold[feature_cols].iloc[start_idx : start_idx + input_length].values
+    y_start = start_idx + input_length + horizon
+    y_i = fold[target_col].iloc[y_start : y_start + output_length].values
+    return X_i, y_i
+
+
+# parallelized version to extract all sequences at once using numpy's sliding_window_view.
+def get_X_y(
+    fold: pd.DataFrame,
+    feature_cols: list,
+    target_col: str,
+    stride: int,
+    input_length: int = INPUT_LENGTH,
+    horizon: int = HORIZON,
+    output_length: int = OUTPUT_LENGTH,
+) -> tuple:
+    """
+    Fully vectorized sequence builder using sliding_window_view.
+    No Python for loop — all windows created at once.
+    """
+    total_span = input_length + horizon + output_length
+    if len(fold) < total_span:
+        raise ValueError(
+            f"Fold too short: {len(fold)} rows, need at least {total_span}."
+        )
+
+    X_all = fold[feature_cols].values  # (n_rows, n_features)
+    y_all = fold[target_col].values  # (n_rows,)
+
+    # all possible windows of size total_span, then subsample by stride
+    # shape → (n_windows, total_span, n_features)
+    X_wins = np.lib.stride_tricks.sliding_window_view(
+        X_all, window_shape=(total_span, X_all.shape[1])
+    )[
+        :, 0, :, :
+    ]  # squeeze extra dim → (n_windows, total_span, n_features)
+
+    # subsample by stride
+    X_wins = X_wins[::stride]  # (n_sequences, total_span, n_features)
+
+    # slice X and y out of each window
+    X = X_wins[:, :input_length, :]  # (n_seq, input_length, n_features)
+    y = X_wins[:, input_length + horizon :, :]  # temp, need target only
+
+    # y from target column directly
+    y_wins = np.lib.stride_tricks.sliding_window_view(y_all, total_span)[::stride]
+    y = y_wins[:, input_length + horizon :]  # (n_seq, output_length)
+
+    print(
+        f"  → {len(X)} sequences  "
+        f"(fold={len(fold)}h, stride={stride}h, span={total_span}h)"
+    )
+
+    return X, y
+
+
+
+def train_or_load_model_lstm(
+    train_new_model,
+    model,          # ← already initialized model passed in
+    X_tr,
+    y_tr,
+    X_val,
+    y_val,
+    EPOCHS,
+    BATCH_SIZE,
+    MODEL_PATH,
+    PATIENCE,
+):
+    if train_new_model:
+        early_stopping = EarlyStopping(
+            monitor="val_loss", patience=PATIENCE, restore_best_weights=True
+        )
+        history = model.fit(
+            X_tr,
+            y_tr,
+            validation_data=(X_val, y_val),
+            epochs=EPOCHS,
+            batch_size=BATCH_SIZE,
+            callbacks=[early_stopping],
+            verbose=1,
+        )
+        model.save(MODEL_PATH)
+        print(f"Trained and saved model to {MODEL_PATH}")
+    else:
+        print(f"Skipping training, using existing model at {MODEL_PATH}")
+        model = load_model(MODEL_PATH)
+        history = None
+
+    model.summary()
+    return model, history
+
 
 #Inputs
 # ── DEFINE INPUT/OUTPUT PARAMETERS ──────────────────────────
