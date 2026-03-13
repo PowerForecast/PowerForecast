@@ -29,6 +29,41 @@ from power_forecast.logic.utils.graphs import plot_predictions_rnn, plot_best_pr
 
 pd.set_option("display.max_columns", None)
 
+
+#Inputs
+# ── DEFINE INPUT/OUTPUT PARAMETERS ──────────────────────────
+
+TARGET_COL = "FRA"
+
+INPUT_LENGTH = 21 * 24  # 168h context fed to RNN
+OUTPUT_LENGTH = 24  # predict 24h of target day
+HORIZON = 24  # skip 24h between input end and output
+TRAIN_TEST_RATIO = 0.9  # 90% of sequences → train, 10% → test
+VAL_RATIO = 0.15  # 15% of train sequences → validation
+STRIDE_TRAIN = 48  # advance 2 day between train sequences
+STRIDE_TEST = 48  # advance 2 day between test sequences (deterministic)
+
+
+PATIENCE = 15
+BATCH_SIZE = 32
+EPOCHS = 100
+MODEL_NAME = "lstm_2"
+
+fit_scaler = True  # set to False to skip scaling (useful for debugging)
+resample_sequences = True
+train_new_model = True  # set to False to load existing model and skip training (must have been trained at least once with train_new_model=True to have the files)
+
+
+model_name = f"{MODEL_NAME}_{TARGET_COL}_in{INPUT_LENGTH}_out{OUTPUT_LENGTH}_h{HORIZON}"
+
+
+# Paths to save scaler, sequences, and model. Adjust as needed.
+SCALER_PATH = Path("raw_data/scalers/scaler.pkl")
+SAVE_SEQUENCES = Path("raw_data/sequences")
+SAVE_SEQUENCES.mkdir(parents=True, exist_ok=True)
+MODEL_PATH = Path(f"raw_data/models/{model_name}.keras")
+MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 # ── Core: single sequence ──────────────────────────────────────────────────
 def get_Xi_yi(
     fold: pd.DataFrame,
@@ -137,41 +172,6 @@ def train_or_load_model_lstm(
 
     model.summary()
     return model, history
-
-
-#Inputs
-# ── DEFINE INPUT/OUTPUT PARAMETERS ──────────────────────────
-
-TARGET_COL = "FRA"
-
-INPUT_LENGTH = 21 * 24  # 168h context fed to RNN
-OUTPUT_LENGTH = 24  # predict 24h of target day
-HORIZON = 24  # skip 24h between input end and output
-TRAIN_TEST_RATIO = 0.9  # 90% of sequences → train, 10% → test
-VAL_RATIO = 0.15  # 15% of train sequences → validation
-STRIDE_TRAIN = 48  # advance 2 day between train sequences
-STRIDE_TEST = 48  # advance 2 day between test sequences (deterministic)
-
-
-PATIENCE = 15
-BATCH_SIZE = 32
-EPOCHS = 100
-MODEL_NAME = "lstm_2"
-
-fit_scaler = True  # set to False to skip scaling (useful for debugging)
-resample_sequences = True
-train_new_model = True  # set to False to load existing model and skip training (must have been trained at least once with train_new_model=True to have the files)
-
-
-model_name = f"{MODEL_NAME}_{TARGET_COL}_in{INPUT_LENGTH}_out{OUTPUT_LENGTH}_h{HORIZON}"
-
-
-# Paths to save scaler, sequences, and model. Adjust as needed.
-SCALER_PATH = Path("raw_data/scalers/scaler.pkl")
-SAVE_SEQUENCES = Path("raw_data/sequences")
-SAVE_SEQUENCES.mkdir(parents=True, exist_ok=True)
-MODEL_PATH = Path(f"raw_data/models/{model_name}.keras")
-MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 df = build_feature_dataframe("raw_data/all_countries.csv", load_from_pickle=True)
