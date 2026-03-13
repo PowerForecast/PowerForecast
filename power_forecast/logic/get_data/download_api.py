@@ -17,40 +17,14 @@ from power_forecast.params import *
 
 
 
-# A utiliser avec le raw_data all_countries.csv
-def create_dataframe_base(filepath: str) -> pd.DataFrame:
-    """
-    Transforms raw electricity price CSV into a time series DataFrame.
 
-    - Index: UTC datetime
-    - Columns: one per country (ISO3 code)
-    - Values: Price (EUR/MWhe)
-    """
-    # Load raw CSV
 
-    df = pd.read_csv(filepath)
-    # Parse UTC datetime & set as index
-    df["Datetime (UTC)"] = pd.to_datetime(df["Datetime (UTC)"], utc=True)
 
-    # Pivot: rows = datetime, columns = country, values = price
-    df_pivot = df.pivot_table(
-        index="Datetime (UTC)",
-        columns="ISO3 Code",
-        values="Price (EUR/MWhe)",
-        fill_value=np.nan,
-        aggfunc="first",
-        dropna=False,
-    )
 
-    # Clean column name metadata
-    df_pivot.columns.name = None
-    df_pivot.index.name = "datetime_utc"
 
-    # Sort index
-    df_pivot = df_pivot.sort_index()
-    df_pivot = df_pivot.drop("MKD", axis=1)
 
-    return df_pivot
+
+
 
 
 def build_feature_dataframe(
@@ -128,14 +102,14 @@ def build_feature_dataframe(
 
     # ── Step 3: Remove outliers ───────────────────────────────────────────────
     print("\n── Step 3: Replace outliers ─────────────────────────────────────")
-    df = replace_outliers_with_interpolation(df, limit_low=limit_low, limit_high=limit_high)
+    #df = replace_outliers_with_interpolation(df, limit_low=limit_low, limit_high=limit_high)
 
 
     # ── Step 4: Temporal features ─────────────────────────────────────────────
     print("\n── Step 4: Temporal features ────────────────────────────────────")
     df = add_temporal_features(df)
-    df = add_public_holidays(df, country=iso_objective)
-    df = add_crisis_column(df, tz='UTC')
+    #df = add_public_holidays(df, country=iso_objective)
+    #df = add_crisis_column(df, tz='UTC')
 
     # ── Step 5: Meteo features ─────────────────────────────────────────────
     print("\n── Step 5: Meteo features ───────────────────────────────────────")
