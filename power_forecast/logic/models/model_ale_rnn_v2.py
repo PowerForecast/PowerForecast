@@ -24,34 +24,34 @@ from pathlib import Path
 from datetime import datetime
 import random
 
+from power_forecast.logic.models.model_ALE_rnn import get_X_y, train_or_load_model_lstm
+from power_forecast.logic.utils.graphs import plot_predictions_rnn, plot_best_predictions
+
+
 pd.set_option("display.max_columns", None)
 
-df = build_feature_dataframe("raw_data/all_countries.csv", load_from_pickle=True)
-
-
+#Inputs
 # ── DEFINE INPUT/OUTPUT PARAMETERS ──────────────────────────
 
 TARGET_COL = "FRA"
-feature_cols = [c for c in df.columns]
 
-INPUT_LENGTH = 14 * 24  # 168h context fed to RNN
-OUTPUT_LENGTH = 48  # predict 24h of target day
-HORIZON = 0  # skip 24h between input end and output
-TRAIN_TEST_RATIO = 0.98  # 98% of sequences → train, 2% → test
-VAL_RATIO = 0.1  # 10% of train sequences → validation
+INPUT_LENGTH = 21 * 24  # 168h context fed to RNN
+OUTPUT_LENGTH = 24  # predict 24h of target day
+HORIZON = 24  # skip 24h between input end and output
+TRAIN_TEST_RATIO = 0.9  # 90% of sequences → train, 10% → test
+VAL_RATIO = 0.15  # 15% of train sequences → validation
 STRIDE_TRAIN = 48  # advance 2 day between train sequences
 STRIDE_TEST = 48  # advance 2 day between test sequences (deterministic)
 
 
-# sample 70% of possible sequences (for faster training; set to 1.0 to use all)
-PATIENCE = 10
-BATCH_SIZE = 64
+PATIENCE = 15
+BATCH_SIZE = 32
 EPOCHS = 100
-MODEL_NAME = "lstm"
+MODEL_NAME = "lstm_2"
 
 fit_scaler = True  # set to False to skip scaling (useful for debugging)
-resample_sequences = False
-train_new_model = False  # set to True to skip training and load existing model
+resample_sequences = True
+train_new_model = True  # set to True to skip training and load existing model
 
 
 model_name = f"{MODEL_NAME}_{TARGET_COL}_in{INPUT_LENGTH}_out{OUTPUT_LENGTH}_h{HORIZON}"
@@ -65,14 +65,10 @@ MODEL_PATH = Path(f"raw_data/models/{model_name}.keras")
 MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
-##-------------------- Train - Test split based on input day --------------------
-
-print("Data start:", df.index.min())
-print("Data end:  ", df.index.max())
-print("Total rows:", len(df))
+df = build_feature_dataframe("raw_data/all_countries.csv", load_from_pickle=True)
+feature_cols = [c for c in df.columns]
 
 cutoff = pd.Timestamp("2023-10-01", tz="UTC")
-
 fold_train = df[df.index < cutoff].copy()
 fold_test = df[df.index >= cutoff - pd.Timedelta(hours=INPUT_LENGTH)].copy()
 
@@ -82,8 +78,6 @@ print(
 print(
     f"fold_test:  {len(fold_test)} rows   {fold_test.index[0]} → {fold_test.index[-1]}"
 )
-print(f"First y_test label: {fold_test.index[INPUT_LENGTH + HORIZON]}")
-
 
 # Scale before sampling sequences, also the target column
 # It will be scaled back to real values at the end for evaluation and plotting.
@@ -91,100 +85,12 @@ scaler = StandardScaler()
 fold_train[feature_cols] = scaler.fit_transform(fold_train[feature_cols])
 fold_test[feature_cols] = scaler.transform(fold_test[feature_cols])
 
-
-## ------------------- CREATE SEQUENCES (X, y) FOR RNN -------------------
-
-## STEP 3 — SAMPLE SEQUENCES FROM fold_train → 3D arrays
-## ✅ Sequences are sampled AFTER scaling (you never want to build
-##    sequences from raw data and scale them after — the scaler
-##    would not have the right statistics per-sequence).
-## ✅ mode='random' for train: model sees diverse starting points.
-## Output: X_train (n, 2 weeks data, n_features) | y_train (n, 24)
-
-# Load if they exisits alreaday, otherwise create them and save for future use.
 if resample_sequences == False:
     X_train = np.load(SAVE_SEQUENCES / "X_train.npy")
     y_train = np.load(SAVE_SEQUENCES / "y_train.npy")
     print(f"Loaded — X_train: {X_train.shape}")
     print(f"Loaded — y_train: {y_train.shape}")
-
-
-# Method to transform our X_train in 3-dimensional array of sequences, and y_train in 2D array of corresponding labels.
-
-
-# ── Core: single sequence ──────────────────────────────────────────────────
-def get_Xi_yi(
-    fold: pd.DataFrame,
-    feature_cols: list,
-    target_col: str,
-    start_idx: int,
-    input_length: int = INPUT_LENGTH,
-    horizon: int = HORIZON,
-    output_length: int = OUTPUT_LENGTH,
-) -> tuple:
-    """
-    Extract one (X_i, y_i) pair from fold starting at start_idx.
-
-        [start_idx → +input_length)           → X_i  (input_length, n_features)
-        [+input_length → +horizon)             → skipped
-        [+input_length+horizon → +output_length) → y_i  (output_length,)
-    """
-    X_i = fold[feature_cols].iloc[start_idx : start_idx + input_length].values
-    y_start = start_idx + input_length + horizon
-    y_i = fold[target_col].iloc[y_start : y_start + output_length].values
-    return X_i, y_i
-
-
-# parallelized version to extract all sequences at once using numpy's sliding_window_view.
-def get_X_y(
-    fold: pd.DataFrame,
-    feature_cols: list,
-    target_col: str,
-    stride: int,
-    input_length: int = INPUT_LENGTH,
-    horizon: int = HORIZON,
-    output_length: int = OUTPUT_LENGTH,
-) -> tuple:
-    """
-    Fully vectorized sequence builder using sliding_window_view.
-    No Python for loop — all windows created at once.
-    """
-    total_span = input_length + horizon + output_length
-    if len(fold) < total_span:
-        raise ValueError(
-            f"Fold too short: {len(fold)} rows, need at least {total_span}."
-        )
-
-    X_all = fold[feature_cols].values  # (n_rows, n_features)
-    y_all = fold[target_col].values  # (n_rows,)
-
-    # all possible windows of size total_span, then subsample by stride
-    # shape → (n_windows, total_span, n_features)
-    X_wins = np.lib.stride_tricks.sliding_window_view(
-        X_all, window_shape=(total_span, X_all.shape[1])
-    )[
-        :, 0, :, :
-    ]  # squeeze extra dim → (n_windows, total_span, n_features)
-
-    # subsample by stride
-    X_wins = X_wins[::stride]  # (n_sequences, total_span, n_features)
-
-    # slice X and y out of each window
-    X = X_wins[:, :input_length, :]  # (n_seq, input_length, n_features)
-    y = X_wins[:, input_length + horizon :, :]  # temp, need target only
-
-    # y from target column directly
-    y_wins = np.lib.stride_tricks.sliding_window_view(y_all, total_span)[::stride]
-    y = y_wins[:, input_length + horizon :]  # (n_seq, output_length)
-
-    print(
-        f"  → {len(X)} sequences  "
-        f"(fold={len(fold)}h, stride={stride}h, span={total_span}h)"
-    )
-
-    return X, y
-
-
+    
 if resample_sequences:
     X_train, y_train = get_X_y(
         fold_train,
@@ -200,11 +106,12 @@ if resample_sequences:
     print(f"Sampled and saved — X_train: {X_train.shape}")
     print(f"Sampled and saved — y_train: {y_train.shape}")
 
+if resample_sequences == False:
+    X_test = np.load(SAVE_SEQUENCES / "X_test.npy")
+    y_test = np.load(SAVE_SEQUENCES / "y_test.npy")
+    print(f"Loaded — X_test: {X_test.shape}")
+    print(f"Loaded — y_test: {y_test.shape}")
 
-# -------------- Validation split from train sequences --------------
-
-print(f"Loaded — X_train: {X_train.shape}")
-print(f"Loaded — y_train: {y_train.shape}")
 
 val_split = int(len(X_train) * (1 - VAL_RATIO))
 
@@ -216,11 +123,7 @@ y_val = y_train[val_split:]
 print(f"\nX_tr:  {X_tr.shape}   y_tr:  {y_tr.shape}")
 print(f"X_val: {X_val.shape}  y_val: {y_val.shape}")
 
-
-# ─────────────────────────────────────────────────────────────────
-## LSTM MODEL
-# ─────────────────────────────────────────────────────────────────
-
+# Define new model structure
 
 def initialize_model_lstm(input_shape, output_length):
     model = Sequential(
@@ -248,48 +151,9 @@ def initialize_model_lstm(input_shape, output_length):
     model.summary()
     return model
 
-
-early_stopping = EarlyStopping(
-    monitor="val_loss", patience=PATIENCE, restore_best_weights=True
-)
-
-
-def train_or_load_model_lstm(
-    train_new_model,
-    model,          # ← already initialized model passed in
-    X_tr,
-    y_tr,
-    X_val,
-    y_val,
-    EPOCHS,
-    BATCH_SIZE,
-    MODEL_PATH,
-    PATIENCE,
-):
-    if train_new_model:
-        early_stopping = EarlyStopping(
-            monitor="val_loss", patience=PATIENCE, restore_best_weights=True
-        )
-        history = model.fit(
-            X_tr,
-            y_tr,
-            validation_data=(X_val, y_val),
-            epochs=EPOCHS,
-            batch_size=BATCH_SIZE,
-            callbacks=[early_stopping],
-            verbose=1,
-        )
-        model.save(MODEL_PATH)
-        print(f"Trained and saved model to {MODEL_PATH}")
-    else:
-        print(f"Skipping training, using existing model at {MODEL_PATH}")
-        model = load_model(MODEL_PATH)
-        history = None
-
-    model.summary()
-    return model, history
-
 model_lstm = initialize_model_lstm(input_shape=(INPUT_LENGTH, len(feature_cols)), output_length=OUTPUT_LENGTH)
+
+
 
 model_lstm, history_lstm = train_or_load_model_lstm(
     train_new_model,
@@ -303,7 +167,6 @@ model_lstm, history_lstm = train_or_load_model_lstm(
     MODEL_PATH,
     PATIENCE,
 )
-
 
 # ---- Create X_test and y_test from fold_test (chronological scan) ----
 X_test, y_test = get_X_y(
@@ -319,9 +182,9 @@ X_test, y_test = get_X_y(
 # Evaluate model on test set
 loss, mae, mse = model_lstm.evaluate(X_test, y_test, verbose=1)
 
-print("Test Loss:", loss)
-print("Test MAE:", mae)
-print("Test MSE:", mse)
+print("Test Loss Normalized:", loss)
+print("Test MAE Normalized:", mae)
+print("Test MSE Normalized:", mse)
 
 target_idx = feature_cols.index(TARGET_COL)
 
@@ -345,6 +208,10 @@ total_span = INPUT_LENGTH + HORIZON + OUTPUT_LENGTH
 max_start = len(fold_test) - total_span
 starts = list(range(0, max_start + 1, STRIDE_TEST))
 
+plot_best_predictions(y_test_real, y_pred_real, TARGET_COL)
+#scp user@your-vm-ip:/path/to/PowerForecast/outputs/plots/best_predictions.png ~/Desktop/
+
+
 # print sequence by sequence, hour by hour
 for seq_idx in range(len(y_test_real) - 3, len(y_test_real)):
     start_idx = starts[seq_idx]
@@ -358,5 +225,5 @@ for seq_idx in range(len(y_test_real) - 3, len(y_test_real)):
         print(
             f"  {timestamp} | Real: {real:>8.2f} EUR/MWh | Predicted: {predicted:>8.2f} EUR/MWh"
         )
-
-
+        
+        
