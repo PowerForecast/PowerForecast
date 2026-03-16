@@ -41,6 +41,7 @@ from typing import Dict, List, Tuple, Sequence
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
 from tensorflow.keras import models, layers, Input, optimizers, metrics
 from tensorflow.keras.regularizers import L1L2
 from tensorflow.keras.layers import Normalization
