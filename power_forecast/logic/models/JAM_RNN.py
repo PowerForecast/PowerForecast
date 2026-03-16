@@ -536,10 +536,10 @@ def cross_validate_baseline_and_lstm():
         )
         history = model.fit(
             X_train, y_train,
-            validation_split=0.3,
+            validation_split=0.1,
             shuffle=False,
-            batch_size=32,
-            epochs=50,
+            batch_size=16,
+            epochs=100,
             callbacks=[es],
             verbose=0
         )
