@@ -181,7 +181,7 @@ def add_lag_and_contexte_features_frontiere(df: pd.DataFrame, iso_objective: str
         new_cols[f'{iso_objective}_lag_{lag}h'] = df[iso_objective].shift(lag)
 
     for w in ROLLING_WINDOWS_FRONTIERE:
-        base = df[iso_objective].shift(1)  # shift(1) anti-leakage
+        base = df[iso_objective].shift(48)  # shift(1) anti-leakage
         roll_min = base.rolling(w).min()
         roll_max = base.rolling(w).max()
 

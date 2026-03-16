@@ -50,7 +50,7 @@ def build_feature_dataframe(
     if keep_only_neighbors:
         df = filter_neighbor_columns(df, iso=iso_objective)
     
-    df = drop_boundary_nans(df)
+    #df = drop_boundary_nans(df)
 
     # ── 3. Replace outliers with interpolation ───────────────────────────────
     df = replace_outliers_with_interpolation(df, limit_low=LIMIT_LOW, limit_high=LIMIT_HIGH)
@@ -136,7 +136,7 @@ def build_feature_dataframe(
     # ── 10. Drop rows with NaN values and interpolate ───────────────────────────────────────────────
     df_clean = clean_dataframe(
         df=df,
-        max_rolling_back=MAX_LAG_BACK,
+        max_rolling_back=336,
         target_day_distance=target_day_distance,
         nan_threshold=DROP_COLUMN_NAN_TRESHOLD,
     )
