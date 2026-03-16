@@ -141,9 +141,9 @@ print(f"\nShape après feature selection : {df_selected.shape}")
 TARGET          = 'FRA'
 N_FEATURES      = df_selected.shape[1]
 
-FOLD_LENGTH      = 24 * 365 * 2   # 2 ans de données horaires
+FOLD_LENGTH      = 24 * 365 * 9   # 2 ans de données horaires
 FOLD_STRIDE      = 24 * 91        # 1 trimestre entre chaque fold
-TRAIN_TEST_RATIO = 0.7
+TRAIN_TEST_RATIO = 0.9
 
 # INPUT_LENGTH = 14 jours — standard EPF confirmé par le papier (section 4.3.2)
 INPUT_LENGTH    = 24 * 14   # 336 pas de temps
