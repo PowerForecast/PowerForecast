@@ -83,7 +83,7 @@ else:
 # if max_train_test_split = True pas besoin the X_val et y_val
 if max_train_test_split:
     # Pas de validation, entraînement sur le maximum de données
-    X_train, X_test, y_train, y_test = X_y_standardizer_XGB(
+    X_train, X_new, y_train, y_true = X_y_standardizer_XGB(
         fold_train=fold_train_xgb,
         fold_test=fold_test_xgb,
         country_objective=country_price_objective,
@@ -91,8 +91,8 @@ if max_train_test_split:
     print("✅ Mode : entraînement maximal (max_train_test_split = True)")
     print(f"   X_train : {X_train.shape}")
     print(f"   y_train        : {y_train.shape}")
-    print(f"   X_test  : {X_test.shape}")
-    print(f"   y_test         : {y_test.shape}")
+    print(f"   X_new  : {X_new.shape}")
+    print(f"   y_true         : {y_true.shape}")
 
 else:
     # Avec jeu de validation, split chronologique sur cutoff_day

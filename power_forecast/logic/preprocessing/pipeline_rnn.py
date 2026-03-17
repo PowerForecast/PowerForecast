@@ -39,8 +39,10 @@ cutoff_day = pd.Timestamp("2023-10-01", tz="UTC")
 ## ==============================================================
 
 #Other inputs
+input_length = 14 * 24  # 3 weeks context fed to RNN
 prediction_horizon_days = 2
 country_price_objective = 'France'
+prediction_length = prediction_horizon_days * 24  # predict 48h of target day
 
 df_common = build_common_dataframe(
     filepath="raw_data/all_countries.csv",
@@ -72,7 +74,7 @@ if max_train_test_split:
         df=df,
         objective_day=objective_day,
         number_days_to_predict=prediction_horizon_days,
-        input_length=INPUT_LENGTH,  # 168h lookback
+        input_length=input_length,  # 168h lookback
     )
 else:
     # RNN
