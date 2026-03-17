@@ -49,8 +49,11 @@ df_rnn = add_features_RNN(
     add_future_meteo=True,
 )
 
+columns_rnn = df_rnn.columns
+print(df_rnn.shape)
+print(columns_rnn)
+
 df= df_rnn
-df.head()
 
 from typing import Dict, List, Tuple, Sequence
 import numpy as np
@@ -144,12 +147,12 @@ N_FEATURES      = df_selected.shape[1]
 
 FOLD_LENGTH      = 24 * 365 * 2
 FOLD_STRIDE      = 24 * 91
-TRAIN_TEST_RATIO = 0.7
+TRAIN_TEST_RATIO = 0.9
 
-INPUT_LENGTH    = 96
+INPUT_LENGTH    = 504
 OUTPUT_LENGTH   = 1
-SEQUENCE_STRIDE = 24
-DAY_AHEAD_GAP   = 24
+SEQUENCE_STRIDE = 48
+DAY_AHEAD_GAP   = 0
 
 print(f"N_FEATURES = {N_FEATURES} | INPUT_LENGTH = {INPUT_LENGTH}h = {INPUT_LENGTH//24} jours")
 
@@ -223,8 +226,6 @@ def train_test_split(fold: pd.DataFrame,
 print(f'N_FEATURES = {N_FEATURES}')
 print(f'INPUT_LENGTH = {INPUT_LENGTH} timesteps = {int(INPUT_LENGTH)/24} days')
 
-OUTPUT_LENGTH = 1
-print(f'OUTPUT_LENGTH = {OUTPUT_LENGTH}')
 
 
 # ================================================================= #
@@ -326,10 +327,9 @@ def get_X_y(
     return np.array(X), np.array(y)
 
 
-N_TRAIN = 1000
-N_TEST  = 100
+N_TRAIN = 504
+N_TEST  = 48
 
-SEQUENCE_STRIDE = 24
 
 
 def get_X_y_strides(fold: pd.DataFrame, input_length: int, output_length: int,

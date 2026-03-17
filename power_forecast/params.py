@@ -264,7 +264,7 @@ PALETTE = [
 ]
 
 # ── Constantes ─────────────────────────────────────────────────────────────────
-DEFAULT_API_KEY = "f26d52ca-874b-49c6-aa45-a3d7d79d43aa"
+DEFAULT_API_KEY = "eae53aee-610c-46a9-8bce-f350cfb45736"
 DEFAULT_TIMEZONE = "UTC"
 DEFAULT_START = "2025-01-01"
 DEFAULT_END = "2025-06-30"
