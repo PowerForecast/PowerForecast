@@ -44,8 +44,7 @@ def predict(data: dict):
         raise HTTPException(status_code=503, detail="Modèle non chargé")
 
     X_new = pd.DataFrame([data])
-    X_preproc = preproc_histxgb_X_new(X_new, column='FRA')
-    y_pred = app.state.model.predict(X_preproc)
+    y_pred = app.state.model.predict(X_new)
 
     return {
         'prix_predit': float(y_pred[0]),
@@ -105,8 +104,7 @@ def predict_from_cache(
 
     # Extrait toutes les lignes d'un coup et prédit en batch
     X_new = df.loc[timestamps]
-    X_preproc = preproc_histxgb_X_new(X_new, column='FRA')
-    y_pred = app.state.model.predict(X_preproc)
+    y_pred = app.state.model.predict(X_new)
 
     predictions = [
         {'date': str(ts), 'prix_predit': float(price)}
