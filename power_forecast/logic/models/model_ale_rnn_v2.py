@@ -5,7 +5,6 @@ from pathlib import Path
 import joblib
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.preprocessing import StandardScaler
-from power_forecast.logic.get_data.build_dataframe import build_feature_dataframe
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.callbacks import EarlyStopping
