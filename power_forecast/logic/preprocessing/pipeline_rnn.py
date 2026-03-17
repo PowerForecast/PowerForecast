@@ -48,6 +48,7 @@ prediction_horizon_days = 2
 country_price_objective = "France"
 prediction_length = prediction_horizon_days * 24  # predict 48h of target day
 
+
 df_common = build_common_dataframe(
     filepath="raw_data/all_countries.csv",
     country_objective=country_price_objective,
