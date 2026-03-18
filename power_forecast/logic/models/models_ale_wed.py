@@ -61,7 +61,7 @@ prediction_length = prediction_horizon_days * 24  # predict 48h of target day
 train_new_model = True
 patience_model = 20
 batch_size_model = 16
-epochs_model = 150
+epochs_model = 100
 version = "3"
 
 
