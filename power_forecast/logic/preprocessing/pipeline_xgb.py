@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from power_forecast.logic.models.registry import save_xgb_data
 from power_forecast.params import *
 from power_forecast.logic.get_data.build_dataframe import (
     build_common_dataframe,
@@ -111,18 +112,10 @@ if not max_train_test_split:
     print(f"   X_test  : {X_test.shape}")
     print(f"   y_test  : {y_test.shape}")
 
-if  max_train_test_split:
-    print("🔍 Types et dtypes :")
-    print(f"   X_train : {type(X_train)} | dtype: {X_train.dtype} | shape: {X_train.shape}")
-    print(f"   y_train : {type(y_train)} | dtype: {y_train.dtype} | shape: {y_train.shape}")
-    print(f"   X_new   : {type(X_new)}   | dtype: {X_new.dtype}   | shape: {X_new.shape}")
-    print(f"   y_true  : {type(y_true)}  | dtype: {y_true.dtype}  | shape: {y_true.shape}")
 
-if not max_train_test_split:
-    print(f"   X_train : {type(X_train)} | dtype: {X_train.dtype} | shape: {X_train.shape}")
-    print(f"   y_train : {type(y_train)} | dtype: {y_train.dtype} | shape: {y_train.shape}")
-    print(f"   X_test  : {type(X_test)}  | dtype: {X_test.dtype}  | shape: {X_test.shape}")
-    print(f"   y_true  : {type(y_true)}  | dtype: {y_true.dtype}  | shape: {y_true.shape}")
-    print(f"   X_new   : {type(X_new)}   | dtype: {X_new.dtype}   | shape: {X_new.shape}")
-    print(f"   X_val   : {type(X_val)}   | dtype: {X_val.dtype}   | shape: {X_val.shape}")
-    print(f"   y_val   : {type(y_val)}   | dtype: {y_val.dtype}   | shape: {y_val.shape}")
+    
+x_new_path, y_true_path = save_xgb_data(
+    X_new=X_new,                  # np.ndarray (heures, features)
+    y_true=y_true,                # np.ndarray (heures,)
+    objective_day=objective_day   # pd.Timestamp
+)
