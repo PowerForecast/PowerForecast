@@ -303,6 +303,16 @@ def load_model_ml(model_name: str = None):
 #     print(f"✅ Scaler loaded from {scaler_path}")
 #     return scaler
 
+
+def save_df_topickle(df):
+    os.makedirs(LOCAL_REGISTRY_PATH_DF, exist_ok=True)
+
+    start_date = df.index.min().strftime("%Y-%m-%d")
+    end_date = df.index.max().strftime("%Y-%m-%d")
+
+    filename = f"{start_date}_to_{end_date}.pkl"
+    path = os.path.join(LOCAL_REGISTRY_PATH_DF, filename)
+
 def save_df(df, name):
     os.makedirs(LOCAL_REGISTRY_PATH_DF, exist_ok=True)
     
