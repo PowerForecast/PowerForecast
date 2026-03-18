@@ -5,6 +5,226 @@ import pickle
 import pandas as pd
 from power_forecast.params import *
 
+
+
+"""
+Fonctions utilitaires pour la sauvegarde de X_new et y_true
+============================================================
+Modèles supportés : RNN (format .npy) · XGB (format .pkl)
+"""
+
+import pickle
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# RNN
+# ──────────────────────────────────────────────────────────────────────────────
+
+def save_rnn_data(
+    X_new: np.ndarray,
+    y_true: np.ndarray,
+    objective_day: pd.Timestamp,
+    input_length: int,
+    prediction_length: int,
+    base_dir: Path = Path("power_forecast/donnees"),
+) -> tuple[Path, Path]:
+    """
+    Sauvegarde X_new et y_true du modèle RNN au format .npy.
+
+    Nomenclature des fichiers
+    -------------------------
+    X_new :
+        ``X_new_{date_début}_{date_fin}_{F}f_rnn.npy``
+
+        - ``date_début``  : premier horodatage de la fenêtre d'entrée
+                            (= objective_day − input_length heures)
+                            format ISO  →  YYYY-MM-DD
+        - ``date_fin``    : dernier horodatage de la fenêtre d'entrée
+                            (= objective_day − 1 heure)
+                            format ISO  →  YYYY-MM-DD
+        - ``{F}f``        : nombre de features (dimension 2 du tableau 3-D),
+                            le suffixe ``f`` signifie *features*
+        - ``rnn``         : identifiant du modèle
+
+        Exemple : ``X_new_2024-01-14_2024-01-15_32f_rnn.npy``
+                  → fenêtre du 14 au 15 janvier 2024, 32 features
+
+    y_true :
+        ``y_true_{date_début}_{date_fin}_{H}h_rnn.npy``
+
+        - ``date_début``  : premier horodatage de la fenêtre cible
+                            (= objective_day)
+                            format ISO  →  YYYY-MM-DD
+        - ``date_fin``    : dernier horodatage de la fenêtre cible
+                            (= objective_day + prediction_length − 1 heure)
+                            format ISO  →  YYYY-MM-DD
+        - ``{H}h``        : nombre d'heures prédites (horizon),
+                            le suffixe ``h`` signifie *heures*
+        - ``rnn``         : identifiant du modèle
+
+        Exemple : ``y_true_2024-01-15_2024-01-15_24h_rnn.npy``
+                  → 24 heures prédites le 15 janvier 2024
+
+    Chemins de sauvegarde
+    ---------------------
+    - X_new  → ``{base_dir}/x_new_rnn/``
+    - y_true → ``{base_dir}/y_true_rnn/``
+
+    Parameters
+    ----------
+    X_new            : np.ndarray, shape (samples, input_length, features)
+    y_true           : np.ndarray, shape (prediction_length,)
+    objective_day    : pd.Timestamp — premier instant de la fenêtre cible
+    input_length     : int — nombre d'heures dans la fenêtre d'entrée
+    prediction_length: int — nombre d'heures dans la fenêtre cible
+    base_dir         : Path — répertoire racine des données
+
+    Returns
+    -------
+    (x_new_path, y_true_path) : chemins absolus des fichiers sauvegardés
+    """
+    # ── Dossiers ──────────────────────────────────────────────────────────────
+    x_new_dir  = base_dir / "x_new_rnn"
+    y_true_dir = base_dir / "y_true_rnn"
+    x_new_dir.mkdir(parents=True, exist_ok=True)
+    y_true_dir.mkdir(parents=True, exist_ok=True)
+
+    # ── Index temporels ───────────────────────────────────────────────────────
+    X_new_index = pd.date_range(
+        start=objective_day - pd.Timedelta(hours=input_length),
+        end=objective_day   - pd.Timedelta(hours=1),
+        freq="h",
+    )
+    y_true_index = pd.date_range(
+        start=objective_day,
+        periods=prediction_length,
+        freq="h",
+    )
+
+    # ── Représentations textuelles pour les noms de fichiers ──────────────────
+    date_start_X_str = X_new_index[0].strftime("%Y-%m-%d")
+    date_end_X_str   = X_new_index[-1].strftime("%Y-%m-%d")
+    date_start_y_str = y_true_index[0].strftime("%Y-%m-%d")
+    date_end_y_str   = y_true_index[-1].strftime("%Y-%m-%d")
+
+    n_features = X_new.shape[2]   # dimension features du tableau 3-D
+
+    # ── Chemins ───────────────────────────────────────────────────────────────
+    x_new_path  = x_new_dir  / f"X_new_{date_start_X_str}_{date_end_X_str}_{n_features}f_rnn.npy"
+    y_true_path = y_true_dir / f"y_true_{date_start_y_str}_{date_end_y_str}_{prediction_length}h_rnn.npy"
+
+    # ── Sauvegarde ────────────────────────────────────────────────────────────
+    np.save(x_new_path,  X_new)
+    np.save(y_true_path, y_true)
+
+    print(f"✅ X_new  sauvegardé  → {x_new_path}")
+    print(f"✅ y_true sauvegardé  → {y_true_path}")
+
+    return x_new_path, y_true_path
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# XGB
+# ──────────────────────────────────────────────────────────────────────────────
+
+def save_xgb_data(
+    X_new: np.ndarray,
+    y_true: np.ndarray,
+    objective_day: pd.Timestamp,
+    base_dir: Path = Path("power_forecast/donnees"),
+) -> tuple[Path, Path]:
+    """
+    Sauvegarde X_new et y_true du modèle XGBoost au format .pkl.
+
+    Nomenclature des fichiers
+    -------------------------
+    X_new :
+        ``X_new_{date_début}_{date_fin}_{F}f_xgb.pkl``
+
+        - ``date_début``  : premier horodatage couvert par X_new
+                            (= objective_day, heure 0)
+                            format ISO  →  YYYY-MM-DD
+        - ``date_fin``    : dernier horodatage couvert par X_new
+                            (= objective_day + len(X_new) − 1 heure)
+                            format ISO  →  YYYY-MM-DD
+        - ``{F}f``        : nombre de colonnes / features du tableau 2-D,
+                            le suffixe ``f`` signifie *features*
+        - ``xgb``         : identifiant du modèle
+
+        Exemple : ``X_new_2024-01-15_2024-01-15_130f_xgb.pkl``
+                  → 48 lignes × 130 features couvrant le 15 janvier 2024
+
+    y_true :
+        ``y_true_{date_début}_{date_fin}_{H}h_xgb.pkl``
+
+        - ``date_début``  : premier horodatage de la cible
+                            (= objective_day)
+                            format ISO  →  YYYY-MM-DD
+        - ``date_fin``    : dernier horodatage de la cible
+                            (= objective_day + len(y_true) − 1 heure)
+                            format ISO  →  YYYY-MM-DD
+        - ``{H}h``        : nombre de valeurs cibles (heures prédites),
+                            le suffixe ``h`` signifie *heures*
+        - ``xgb``         : identifiant du modèle
+
+        Exemple : ``y_true_2024-01-15_2024-01-15_48h_xgb.pkl``
+                  → 48 heures prédites le 15 janvier 2024
+
+    Chemins de sauvegarde
+    ---------------------
+    - X_new  → ``{base_dir}/x_new_xgb/``
+    - y_true → ``{base_dir}/y_true_xgb/``
+
+    Parameters
+    ----------
+    X_new         : np.ndarray, shape (heures, features)   — tableau 2-D
+    y_true        : np.ndarray, shape (heures,)
+    objective_day : pd.Timestamp — premier instant de la journée cible
+    base_dir      : Path — répertoire racine des données
+
+    Returns
+    -------
+    (x_new_path, y_true_path) : chemins absolus des fichiers sauvegardés
+    """
+    # ── Dossiers ──────────────────────────────────────────────────────────────
+    x_new_dir  = base_dir / "x_new_xgb"
+    y_true_dir = base_dir / "y_true_xgb"
+    x_new_dir.mkdir(parents=True, exist_ok=True)
+    y_true_dir.mkdir(parents=True, exist_ok=True)
+
+    # ── Index temporels ───────────────────────────────────────────────────────
+    X_new_index  = pd.date_range(start=objective_day, periods=len(X_new),  freq="h")
+    y_true_index = pd.date_range(start=objective_day, periods=len(y_true), freq="h")
+
+    # ── Représentations textuelles pour les noms de fichiers ──────────────────
+    date_start_X_str = X_new_index[0].strftime("%Y-%m-%d")
+    date_end_X_str   = X_new_index[-1].strftime("%Y-%m-%d")
+    date_start_y_str = y_true_index[0].strftime("%Y-%m-%d")
+    date_end_y_str   = y_true_index[-1].strftime("%Y-%m-%d")
+
+    n_features = X_new.shape[1]   # dimension features du tableau 2-D
+    n_hours    = len(y_true)
+
+    # ── Chemins ───────────────────────────────────────────────────────────────
+    x_new_path  = x_new_dir  / f"X_new_{date_start_X_str}_{date_end_X_str}_{n_features}f_xgb.pkl"
+    y_true_path = y_true_dir / f"y_true_{date_start_y_str}_{date_end_y_str}_{n_hours}h_xgb.pkl"
+
+    # ── Sauvegarde ────────────────────────────────────────────────────────────
+    with open(x_new_path,  "wb") as f:
+        pickle.dump(X_new,  f)
+    with open(y_true_path, "wb") as f:
+        pickle.dump(y_true, f)
+
+    print(f"✅ X_new  sauvegardé  → {x_new_path}")
+    print(f"✅ y_true sauvegardé  → {y_true_path}")
+
+    return x_new_path, y_true_path
+
+
 def save_model_ml(model, model_name: str = None) -> str:
     """
     Sauvegarde le modèle localement.
